@@ -15,5 +15,5 @@ Change it here and push, then in each plug-in run
 `git submodule update --remote kit`, and commit the new position. Plug-ins move to a new kit
 when they're ready.
 
-VT323 and Press Start 2P are under the SIL Open Font License (`fonts/`). The kit's own licence
+VT323 and Glyph Grotesque (Terminal Grotesque by Raphael Bastide, renamed) are under the SIL Open Font License (`fonts/`). The kit's own licence
 is still to be decided, and has to suit every plug-in that builds on it.

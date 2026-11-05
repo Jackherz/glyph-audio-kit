@@ -41,7 +41,7 @@ inline Stock graphite()
              juce::Colour (0xff4c524d), dark, ink, juce::Colour (0xff101211), juce::Colour (0xffe86a2c), dark, juce::Colour (0xffe86a2c) };
 }
 
-// VT323 for everything; Press Start 2P for the wordmark alone.
+// VT323 for everything; Glyph Grotesque for the wordmark alone.
 inline juce::Font label (float size)
 {
     static auto face = juce::Typeface::createSystemTypefaceFor (KitFonts::VT323Regular_ttf, (size_t) KitFonts::VT323Regular_ttfSize);
@@ -50,7 +50,7 @@ inline juce::Font label (float size)
 
 inline juce::Font wordmark (float size)
 {
-    static auto face = juce::Typeface::createSystemTypefaceFor (KitFonts::PressStart2PRegular_ttf, (size_t) KitFonts::PressStart2PRegular_ttfSize);
+    static auto face = juce::Typeface::createSystemTypefaceFor (KitFonts::GlyphGrotesqueRegular_ttf, (size_t) KitFonts::GlyphGrotesqueRegular_ttfSize);
     return juce::Font (juce::FontOptions (face).withHeight (size));
 }
 
@@ -142,7 +142,7 @@ inline void drawMasthead (juce::Graphics& g, juce::Rectangle<int> area, const St
     g.drawText (chip, box, juce::Justification::centred);
     row.removeFromLeft (16);
 
-    const auto wordFont = wordmark (30.0f);
+    const auto wordFont = wordmark (48.0f);
     g.setColour (s.ink);
     g.setFont (wordFont);
     const int wordWidth = textWidth (wordFont, word) + 4;

@@ -5,6 +5,6 @@ juce_add_binary_data(kit_fonts
   NAMESPACE KitFonts
   SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/fonts/VT323-Regular.ttf
-    ${CMAKE_CURRENT_LIST_DIR}/fonts/PressStart2P-Regular.ttf)
+    ${CMAKE_CURRENT_LIST_DIR}/fonts/GlyphGrotesque-Regular.ttf)
 set_target_properties(kit_fonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(kit_fonts INTERFACE ${CMAKE_CURRENT_LIST_DIR}/include)

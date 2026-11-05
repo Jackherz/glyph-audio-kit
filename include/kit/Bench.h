@@ -302,7 +302,7 @@ public:
 
         auto row = r.reduced (1, 1);
         auto title = row.removeFromLeft (92);
-        g.setFont (wordmark (9.0f));
+        g.setFont (wordmark (14.0f));
         g.drawText ("THE", title.removeFromTop (title.getHeight() / 2).withTrimmedLeft (10).withTrimmedBottom (3), juce::Justification::centredBottom);
         g.drawText ("BENCH", title.withTrimmedLeft (10).withTrimmedTop (3), juce::Justification::centredTop);
 
