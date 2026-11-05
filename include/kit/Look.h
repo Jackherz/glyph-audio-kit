@@ -3,6 +3,9 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <KitFonts.h>
 
+#include <map>
+#include <tuple>
+
 // The sheet every plug-in in the range is drawn on: one ink, two typefaces, hard
 // offset shadows, square corners. A plug-in differs by its paper stock and nothing
 // else, so the same control looks and behaves the same wherever you meet it.
@@ -53,7 +56,23 @@ inline juce::Font wordmark (float size)
 
 inline int textWidth (const juce::Font& font, const juce::String& text)
 {
-    return juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text) + 0.5f);
+    // Measuring means shaping the text, font search and all, and panels ask on every paint.
+    // The answer never changes, so it's only worked out once.
+    struct Key
+    {
+        juce::String text, typeface;
+        float height;
+        bool operator< (const Key& o) const { return std::tie (height, text, typeface) < std::tie (o.height, o.text, o.typeface); }
+    };
+    thread_local std::map<Key, int> widths;
+    const Key key { text, font.getTypefaceName() + font.getTypefaceStyle(), font.getHeight() };
+    if (const auto found = widths.find (key); found != widths.end())
+        return found->second;
+    if (widths.size() > 4096)
+        widths.clear();   // values that keep changing (a readout's figures) can't grow it for ever
+    const int width = juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text) + 0.5f);
+    widths.emplace (key, width);
+    return width;
 }
 
 // NAME ........ FIGURE: ties a label to a value when there's no room for a rule.

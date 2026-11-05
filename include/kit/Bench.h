@@ -226,14 +226,19 @@ private:
 
 // The strip along the bottom of every plug-in: its own name and state, what's waiting
 // from elsewhere, and SEND, TAKE and the folder it all lives in.
-class Strip final : public juce::Component
+class Strip final : public juce::Component, private juce::Timer
 {
 public:
     Strip (const Stock& stockToUse, juce::String chipText, juce::String nameText, juce::String ownerText)
         : s (stockToUse), chip (std::move (chipText)), name (std::move (nameText)), owner (std::move (ownerText))
     {
-        sendKey.onClick = [this] { if (onSend) onSend(); };
-        takeKey.onClick = [this] { if (onTake) onTake(); };
+        sendKey.onClick = [this]
+        {
+            const bool sending = sendKey.getButtonText().startsWith ("SEND");   // not STOP
+            if (onSend) onSend();
+            if (sending) playHands (Hands::offer);
+        };
+        takeKey.onClick = [this] { if (onTake) onTake(); playHands (Hands::shake); };
         folderKey.onClick = [this] { showFolderMenu(); };
         refreshFolderKey();
         addAndMakeVisible (sendKey);
@@ -242,11 +247,36 @@ public:
     }
 
     std::function<void()> onSend, onTake;
+
+    // SEND reaches out and nobody's there yet; TAKE is the other hand arriving.
+    enum class Hands { none, offer, shake };
+    void playHands (Hands kind)
+    {
+        hands = kind;
+        handsStarted = juce::Time::getMillisecondCounter();
+        startTimerHz (30);
+        repaint();
+    }
+    // For checking a frame by eye or in a test: holds the picture at this many seconds in.
+    void holdHands (Hands kind, double seconds) { hands = kind; handsHeldAt = seconds; repaint(); }
+    Hands handsShowing() const { return hands; }
+    bool handIsHeldOut() const { return handHeldOut; }
+
     int reservedRight = 0;   // room left beside the keys for a control the plug-in adds
     void setTakeShown (bool shown) { takeKey.setVisible (shown); resized(); repaint(); }   // for a plug-in that has nothing to take into
 
     void set (const juce::String& state, const juce::String& momentText, const juce::String& sendText, bool sendOn, bool takeOn)
     {
+        // The key says STOP for as long as bars are being recorded: the hand stays out for
+        // all of it, and goes back a moment after.
+        if (const bool recording = sendText == "STOP"; recording != handHeldOut)
+        {
+            handHeldOut = recording;
+            if (recording && hands != Hands::offer)
+                playHands (Hands::offer);
+            else if (! recording)
+                handsStarted = juce::Time::getMillisecondCounter() - (juce::uint32) ((offerSeconds - 1.0) * 1000.0);
+        }
         if (state == stateText && momentText == moment && sendText == sendKey.getButtonText() && sendOn == sendKey.isEnabled() && takeOn == takeKey.isEnabled())
             return;
         stateText = state;
@@ -273,8 +303,8 @@ public:
         auto row = r.reduced (1, 1);
         auto title = row.removeFromLeft (92);
         g.setFont (wordmark (9.0f));
-        g.drawText ("THE", title.removeFromTop (title.getHeight() / 2).withTrimmedLeft (10), juce::Justification::centredBottom);
-        g.drawText ("BENCH", title.withTrimmedLeft (10), juce::Justification::centredTop);
+        g.drawText ("THE", title.removeFromTop (title.getHeight() / 2).withTrimmedLeft (10).withTrimmedBottom (3), juce::Justification::centredBottom);
+        g.drawText ("BENCH", title.withTrimmedLeft (10).withTrimmedTop (3), juce::Justification::centredTop);
 
         g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
         auto mine = row.removeFromLeft (row.getWidth() * 3 / 10).withTrimmedLeft (1);
@@ -295,12 +325,14 @@ public:
         auto rest = row.reduced (12, 0).withRight (sendKey.getX() - reservedRight - 6);
         g.setColour (s.soft);
         g.drawFittedText (moment, rest, juce::Justification::centredLeft, 1, 0.7f);
+        paintHands (g, rest.removeFromRight (juce::jmin (150, rest.getWidth())));
     }
 
     void resized() override
     {
         auto r = keysArea();
-        folderKey.setBounds (r.removeFromRight (keyWidth));
+        // Its name is yours, so it takes the width that name needs.
+        folderKey.setBounds (r.removeFromRight (juce::jmax (keyWidth, 8 * folderKey.getButtonText().length() + 28)));
         r.removeFromRight (keyGap);
         if (takeKey.isVisible())
         {
@@ -311,10 +343,108 @@ public:
     }
 
 private:
+    static constexpr double offerSeconds = 2.6, shakeSeconds = 2.2;
+
+    double handsTime() const
+    {
+        return handsHeldAt >= 0.0 ? handsHeldAt : (juce::Time::getMillisecondCounter() - handsStarted) * 0.001;
+    }
+
+    void timerCallback() override
+    {
+        if (handsHeldAt < 0.0 && ! (hands == Hands::offer && handHeldOut) && handsTime() > (hands == Hands::shake ? shakeSeconds : offerSeconds))
+        {
+            hands = Hands::none;
+            stopTimer();
+        }
+        repaint();
+    }
+
+    // The hands as pixels, on a hard grid so they're the same stuff as the panel's type.
+    static void paintArt (juce::Graphics& g, const char* const* art, int rows, int x, int y, int pixel, bool mirrored)
+    {
+        for (int row = 0; row < rows; ++row)
+        {
+            const juce::String line (art[row]);
+            for (int c = 0; c < line.length(); ++c)
+                if (line[c] == '#')
+                    g.fillRect (x + (mirrored ? line.length() - 1 - c : c) * pixel, y + row * pixel, pixel, pixel);
+        }
+    }
+
+    void paintHands (juce::Graphics& g, juce::Rectangle<int> area)
+    {
+        if (hands == Hands::none)
+            return;
+        // A cuff, the palm, the thumb up, reaching right.
+        static const char* const open[] {
+            "......##......",
+            "......###.....",
+            "##.....###....",
+            "##..#########.",
+            "##.##########.",
+            "##.###########",
+            "##.##########.",
+            "##..########..",
+            "##............",
+        };
+        // Both of them, thumbs locked, fingers wrapped round.
+        static const char* const clasped[] {
+            "##.....###..........##",
+            "##....#####.........##",
+            "##..########.#####..##",
+            "##.##########.#####.##",
+            "##.####.#.#.#.#####.##",
+            "##.###.#.#.#.#.####.##",
+            "##..###.#.#.#.###...##",
+            "##...#########......##",
+            "##..................##",
+        };
+        constexpr int pixel = 3, openWidth = 14 * pixel, claspWidth = 22 * pixel, artHeight = 9 * pixel;
+        g.setColour (s.head);
+        g.fillRect (area);
+        g.setColour (s.ink);
+        const double t = handsTime();
+        const int y = area.getCentreY() - artHeight / 2;
+        const int middle = area.getCentreX();
+        const auto stepped = [] (double v) { return juce::roundToInt (v / pixel) * pixel; };   // stays on the grid
+        const juce::Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (area);
+        if (hands == Hands::offer)
+        {
+            // Out from the left, waits in the middle with a small hopeful wave, and goes back.
+            const double going = handHeldOut ? 1.0 : juce::jlimit (0.0, 1.0, (offerSeconds - t) / 0.35);
+            const double inOut = juce::jmin (juce::jlimit (0.0, 1.0, t / 0.35), going);
+            const int x = area.getX() - openWidth + stepped ((double) (middle + openWidth / 2 - area.getX()) * inOut);
+            const int wave = t > 0.5 && (handHeldOut || t < offerSeconds - 0.5) ? stepped (3.0 * std::sin (t * 7.0)) : 0;
+            paintArt (g, open, 9, x, y + wave, pixel, false);
+            return;
+        }
+        // In from both sides, clasp, three shakes, and away.
+        constexpr double meet = 0.3;
+        if (t < meet || t > shakeSeconds - meet)
+        {
+            const double apart = 1.0 - juce::jmin (juce::jlimit (0.0, 1.0, t / meet), juce::jlimit (0.0, 1.0, (shakeSeconds - t) / meet));
+            const int travel = stepped ((double) (area.getWidth() / 2) * apart);
+            paintArt (g, open, 9, middle - openWidth - travel, y, pixel, false);
+            paintArt (g, open, 9, middle + travel, y, pixel, true);
+            return;
+        }
+        const double shaking = (t - meet) / (shakeSeconds - 2.0 * meet);
+        const int pump = stepped (6.0 * std::sin (shaking * 3.0 * juce::MathConstants<double>::twoPi));
+        paintArt (g, clasped, 9, middle - claspWidth / 2, y + pump, pixel, false);
+    }
+
+    Hands hands = Hands::none;
+    juce::uint32 handsStarted = 0;
+    double handsHeldAt = -1.0;
+    bool handHeldOut = false;
+
     void refreshFolderKey()
     {
         const auto category = setting ("category_" + owner);
         folderKey.setButtonText (category.isNotEmpty() ? category.toUpperCase() : juce::String ("FOLDER"));
+        resized();
         folderKey.setTooltip ("Sending to " + audioFolder (owner).getFullPathName());
     }
 
