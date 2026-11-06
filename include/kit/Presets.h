@@ -35,6 +35,11 @@ public:
     virtual void commit (std::unique_ptr<juce::XmlElement> before, const juce::String& beforeName) = 0;
     virtual juce::String currentName() const = 0;
     virtual void setCurrentName (const juce::String&) = 0;
+    // Optional. Whether the sound has moved from its preset, shown on the bar.
+    virtual bool isEdited() const { return false; }
+    // Optional. A part of a preset that can be loaded on its own ("effects"); empty for none.
+    virtual juce::String partName() const { return {}; }
+    virtual void applyPart (const juce::XmlElement&) {}
 
     const juce::File& getFolder() const noexcept { return folder; }
 
@@ -64,6 +69,15 @@ public:
         if (xml == nullptr)
             return false;
         apply (*xml, entry.name);
+        return true;
+    }
+
+    bool loadPart (const Entry& entry)
+    {
+        const auto xml = read (entry);
+        if (xml == nullptr)
+            return false;
+        applyPart (*xml);
         return true;
     }
 
@@ -482,6 +496,8 @@ private:
         juce::PopupMenu menu, file;
         const bool fav = presets.isFavourite (entry.name);
         menu.addItem (1, fav ? "Remove from favourites" : "Add to favourites");
+        if (const auto part = presets.partName(); part.isNotEmpty())
+            menu.addItem (4, "Load only its " + part);
         if (! entry.factory)
         {
             for (int i = 0; i < presets.categoryList().size(); ++i)
@@ -496,6 +512,8 @@ private:
         {
             if (chosen == 1)
                 presets.setFavourite (entry.name, ! fav);
+            else if (chosen == 4)
+                presets.loadPart (entry);
             else if (chosen >= 100)
                 presets.setCategory (entry, presets.categoryList()[chosen - 100]);
             else if (chosen == 3)
@@ -621,7 +639,9 @@ public:
     void refresh()   // shows the current preset's name
     {
         const auto current = presets.currentName();
-        name.setButtonText (current.isEmpty() ? juce::String ("INIT") : current.toUpperCase());
+        const auto shown = (current.isEmpty() ? juce::String ("INIT") : current.toUpperCase()) + (presets.isEdited() ? " *" : "");
+        if (shown != name.getButtonText())
+            name.setButtonText (shown);
     }
 
 private:
