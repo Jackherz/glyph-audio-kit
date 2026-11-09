@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 
 namespace kit
 {
@@ -15,7 +16,7 @@ struct HalfBandPath
     std::array<double, 2> x {}, y {};
     double run (double in, const std::array<double, 2>& coefficients) noexcept
     {
-        for (size_t n = 0; n < coefficients.size(); ++n)
+        for (std::size_t n = 0; n < coefficients.size(); ++n)
         {
             const double out = coefficients[n] * (in - y[n]) + x[n];
             x[n] = in;
