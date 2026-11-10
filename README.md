@@ -47,8 +47,8 @@ Plug-ins move when they're ready, so two plug-ins can sit on different versions.
 
 ## Licence
 
-No licence has been chosen for the kit's code yet, so it is all rights reserved for now;
-whatever is chosen has to suit every plug-in that builds on it. The fonts are under the
+The kit's code is licensed under the GNU GPL v3 ([LICENSE](LICENSE)), like the plug-ins
+that build on it. It needs JUCE, which is used under its AGPLv3 licence. The fonts are under the
 SIL Open Font License ([`fonts/OFL-VT323.txt`](fonts/OFL-VT323.txt),
 [`fonts/OFL-GlyphGrotesque.txt`](fonts/OFL-GlyphGrotesque.txt)). Glyph Grotesque is
 Terminal Grotesque by Raphael Bastide, renamed.
