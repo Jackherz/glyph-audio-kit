@@ -229,6 +229,8 @@ private:
 class Strip final : public juce::Component, private juce::Timer
 {
 public:
+    bool frameless = false;   // a rounded surface with no frame, shadow or dividers, for a plug-in drawn that way
+
     Strip (const Stock& stockToUse, juce::String chipText, juce::String nameText, juce::String ownerText)
         : s (stockToUse), chip (std::move (chipText)), name (std::move (nameText)), owner (std::move (ownerText))
     {
@@ -293,12 +295,21 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto r = getLocalBounds().withTrimmedRight (3).withTrimmedBottom (3);
-        g.setColour (s.shadow);
-        g.fillRect (r.translated (3, 3));
-        g.setColour (s.head);
-        g.fillRect (r);
-        g.setColour (s.ink);
-        g.drawRect (r, 1);
+        if (frameless)
+        {
+            g.setColour (s.head);
+            g.fillRoundedRectangle (r.toFloat(), 6.0f);
+            g.setColour (s.ink);
+        }
+        else
+        {
+            g.setColour (s.shadow);
+            g.fillRect (r.translated (3, 3));
+            g.setColour (s.head);
+            g.fillRect (r);
+            g.setColour (s.ink);
+            g.drawRect (r, 1);
+        }
 
         auto row = r.reduced (1, 1);
         auto title = row.removeFromLeft (92);
@@ -306,10 +317,14 @@ public:
         g.drawText ("THE", title.removeFromTop (title.getHeight() / 2).withTrimmedLeft (10).withTrimmedBottom (3), juce::Justification::centredBottom);
         g.drawText ("BENCH", title.withTrimmedLeft (10).withTrimmedTop (3), juce::Justification::centredTop);
 
-        g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
+        if (! frameless)
+            g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
         auto mine = row.removeFromLeft (row.getWidth() * 3 / 10).withTrimmedLeft (1);
         g.setColour (s.panel);
-        g.fillRect (mine);
+        if (frameless)
+            g.fillRoundedRectangle (mine.reduced (0, 4).toFloat(), 4.0f);
+        else
+            g.fillRect (mine);
         auto text = mine.reduced (12, 0);
         const auto font = label (18.0f);
         g.setFont (font);
@@ -321,7 +336,8 @@ public:
         g.drawFittedText (stateText, text, juce::Justification::centredLeft, 1, 0.7f);
 
         g.setColour (s.ink);
-        g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
+        if (! frameless)
+            g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
         auto rest = row.reduced (12, 0).withRight (sendKey.getX() - reservedRight - 6);
         g.setColour (s.soft);
         g.drawFittedText (moment, rest, juce::Justification::centredLeft, 1, 0.7f);
