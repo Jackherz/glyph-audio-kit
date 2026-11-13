@@ -295,7 +295,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto r = getLocalBounds().withTrimmedRight (3).withTrimmedBottom (3);
-        if (frameless)
+        if (frameless || s.frameless)
         {
             g.setColour (s.head);
             g.fillRoundedRectangle (r.toFloat(), 6.0f);
@@ -317,11 +317,11 @@ public:
         g.drawText ("THE", title.removeFromTop (title.getHeight() / 2).withTrimmedLeft (10).withTrimmedBottom (3), juce::Justification::centredBottom);
         g.drawText ("BENCH", title.withTrimmedLeft (10).withTrimmedTop (3), juce::Justification::centredTop);
 
-        if (! frameless)
+        if (! (frameless || s.frameless))
             g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
         auto mine = row.removeFromLeft (row.getWidth() * 3 / 10).withTrimmedLeft (1);
         g.setColour (s.panel);
-        if (frameless)
+        if (frameless || s.frameless)
             g.fillRoundedRectangle (mine.reduced (0, 4).toFloat(), 4.0f);
         else
             g.fillRect (mine);
@@ -336,7 +336,7 @@ public:
         g.drawFittedText (stateText, text, juce::Justification::centredLeft, 1, 0.7f);
 
         g.setColour (s.ink);
-        if (! frameless)
+        if (! (frameless || s.frameless))
             g.drawVerticalLine (row.getX(), (float) row.getY(), (float) row.getBottom());
         auto rest = row.reduced (12, 0).withRight (sendKey.getX() - reservedRight - 6);
         g.setColour (s.soft);

@@ -25,6 +25,10 @@ struct Stock
     juce::Colour accent;    // the one colour a stock may have; ink if it has none
     juce::Colour onAccent;
     juce::Colour lit;       // what "on" looks like, on every switch and light; shadow reads on it
+    // Drawn without frames or hard shadows: sheets, panels and windows are filled rounded
+    // surfaces, keys are plates, knobs sit inside an arc that fills to the value, and names
+    // are set in the sans face. Off, it's the hard-framed sheet.
+    bool frameless = false;
 };
 
 inline Stock cream()
@@ -46,6 +50,35 @@ inline juce::Font label (float size)
 {
     static auto face = juce::Typeface::createSystemTypefaceFor (KitFonts::VT323Regular_ttf, (size_t) KitFonts::VT323Regular_ttfSize);
     return juce::Font (juce::FontOptions (face).withHeight (size));
+}
+
+// The system's sans-serif, a little tracked for capitals: names and labels on a frameless stock.
+inline juce::Font sans (float size)
+{
+    return juce::Font (juce::FontOptions().withName (juce::Font::getDefaultSansSerifFontName()).withHeight (size)).withExtraKerningFactor (0.06f);
+}
+
+// A name: the sans face on a frameless stock, at the size that sits where VT323 at `size` did.
+inline juce::Font nameFont (bool frameless, float size) { return frameless ? sans (size * 0.72f) : juce::Font (label (size)); }
+
+// A surface: a filled, rounded shape with no frame and no shadow.
+constexpr float surfaceCorner = 6.0f;
+inline void fillSurface (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour, float corner = surfaceCorner)
+{
+    g.setColour (colour);
+    if (! colour.isOpaque() || r.getWidth() * r.getHeight() < 20000.0f)
+    {
+        g.fillRoundedRectangle (r, corner);
+        return;
+    }
+    // A big one, every frame: plain rectangles are far cheaper than one large rounded path,
+    // so only the four corners are curves.
+    g.fillRect (r.reduced (corner, 0.0f));
+    g.fillRect (r.withWidth (corner).reduced (0.0f, corner));
+    g.fillRect (r.withLeft (r.getRight() - corner).reduced (0.0f, corner));
+    for (const float x : { r.getX(), r.getRight() - 2.0f * corner })
+        for (const float y : { r.getY(), r.getBottom() - 2.0f * corner })
+            g.fillEllipse (x, y, 2.0f * corner, 2.0f * corner);
 }
 
 inline juce::Font wordmark (float size)
@@ -86,6 +119,11 @@ inline void leader (juce::Graphics& g, int x1, int x2, int y, juce::Colour c)
 // A sheet: a hard offset, a fill and a frame.
 inline void drawSheet (juce::Graphics& g, juce::Rectangle<int> r, const Stock& s, int offset = 3)
 {
+    if (s.frameless)
+    {
+        fillSurface (g, r.toFloat(), s.panel);
+        return;
+    }
     g.setColour (s.shadow);
     g.fillRect (r.translated (offset, offset));
     g.setColour (s.panel);
@@ -103,20 +141,30 @@ inline void drawPanel (juce::Graphics& g, juce::Rectangle<int> r, const Stock& s
 {
     drawSheet (g, r, s);
     auto head = r.removeFromTop (panelHeadHeight).reduced (1, 1);
-    g.setColour (s.head);
-    g.fillRect (head);
-    g.setColour (s.ink);
-    g.drawHorizontalLine (head.getBottom(), (float) r.getX(), (float) r.getRight());
+    if (! s.frameless)
+    {
+        g.setColour (s.head);
+        g.fillRect (head);
+        g.setColour (s.ink);
+        g.drawHorizontalLine (head.getBottom(), (float) r.getX(), (float) r.getRight());
+    }
     auto row = head.reduced (8, 0);
     const auto font = label (16.0f);
     g.setFont (font);
+    g.setColour (s.ink);
     const auto block = row.removeFromLeft (22).withSizeKeepingCentre (22, 16);
-    g.fillRect (block);
+    if (s.frameless)
+        g.fillRoundedRectangle (block.toFloat(), 3.0f);
+    else
+        g.fillRect (block);
     g.setColour (s.panel);
     g.drawText (index, block, juce::Justification::centred);
     row.removeFromLeft (6);
     g.setColour (s.ink);
-    g.drawText (name, row.removeFromLeft (textWidth (font, name) + 2), juce::Justification::centredLeft);
+    const auto named = nameFont (s.frameless, 16.0f);
+    g.setFont (named);
+    g.drawText (name, row.removeFromLeft (textWidth (named, name) + 2), juce::Justification::centredLeft);
+    g.setFont (font);
     g.setColour (s.soft);
     const int tailWidth = textWidth (font, tail) + 2;
     g.drawText (tail, row.removeFromRight (tailWidth), juce::Justification::centredRight);
@@ -160,19 +208,24 @@ inline void drawMasthead (juce::Graphics& g, juce::Rectangle<int> area, const St
 inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock& s, const juce::String& title,
                          const juce::String& chip, const juce::String& value, const juce::String& meta, bool longText)
 {
-    g.setColour (s.shadow);
-    g.fillRect (r.translated (3, 3));
-    g.setColour (s.sunk);
-    g.fillRect (r);
-    g.setColour (s.ink);
-    g.drawRect (r, 1);
+    if (s.frameless)
+        fillSurface (g, r.toFloat(), s.sunk);
+    else
+    {
+        g.setColour (s.shadow);
+        g.fillRect (r.translated (3, 3));
+        g.setColour (s.sunk);
+        g.fillRect (r);
+        g.setColour (s.ink);
+        g.drawRect (r, 1);
+    }
     auto inner = r.reduced (10, 6);
     auto top = inner.removeFromTop (16);
     const auto small = label (15.0f);
     g.setFont (small);
     const auto chipBox = top.removeFromRight (textWidth (small, chip) + 10);
     g.setColour (s.onSunk);
-    g.fillRect (chipBox);
+    g.fillRoundedRectangle (chipBox.toFloat(), s.frameless ? 3.0f : 0.0f);
     g.setColour (s.sunk);
     g.drawText (chip, chipBox, juce::Justification::centred);
     g.setColour (s.onSunk.withAlpha (0.75f));
@@ -261,6 +314,32 @@ public:
         const float r = area.getWidth() * 0.5f;
         const auto c = area.getCentre();
         const float a0 = juce::degreesToRadians (-135.0f), a1 = juce::degreesToRadians (135.0f);
+        if (s.frameless)
+        {
+            // Inside an arc that fills to the value: from the middle on a knob whose range
+            // runs either side of zero.
+            const float track = r + 8.0f * u;
+            const auto arc = [&] (float from, float to, juce::Colour colour)
+            {
+                juce::Path path;
+                path.addCentredArc (c.x, c.y, track, track, 0.0f, a0 + from * (a1 - a0), a0 + to * (a1 - a0), true);
+                g.setColour (colour);
+                g.strokePath (path, juce::PathStrokeType (2.6f * u, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            };
+            const bool bipolar = slider.getMinimum() < 0.0 && slider.getMaximum() > 0.0;
+            const float origin = bipolar ? (float) slider.valueToProportionOfLength (0.0) : 0.0f;
+            arc (0.0f, 1.0f, s.ink.withAlpha (0.16f));
+            arc (juce::jmin (origin, pos), juce::jmax (origin, pos), s.ink.withAlpha (slider.isMouseOverOrDragging() ? 1.0f : 0.82f));
+            g.setColour (s.shadow.withAlpha (0.45f));
+            g.fillEllipse (area.translated (0.0f, 2.0f * u));
+            g.setColour (knobFace (slider));
+            g.fillEllipse (area);
+            juce::Path hand;
+            hand.addRoundedRectangle (-1.5f * u, -r * 0.86f, 3.0f * u, r * 0.5f, 1.5f * u);
+            g.setColour (knobPointer (slider));
+            g.fillPath (hand, juce::AffineTransform::rotation (a0 + pos * (a1 - a0)).translated (c));
+            return;
+        }
         g.setColour (slider.isMouseOverOrDragging() ? s.ink : s.soft.withAlpha (0.8f));
         for (int i = 0; i <= 4; ++i)
         {
@@ -285,6 +364,24 @@ public:
     // says whether it's on.
     void drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour&, bool hover, bool down) override
     {
+        if (s.frameless)
+        {
+            // A plate: faint at rest, stronger under the mouse, solid while it's on.
+            const auto& properties = b.getProperties();
+            const bool cell = properties.getWithDefault ("flat", false), light = properties.getWithDefault ("led", false);
+            const bool filled = properties.getWithDefault ("accent", false), held = b.getToggleState() && ! light, live = b.isEnabled();
+            const auto plate = (cell ? b.getLocalBounds() : b.getLocalBounds().withTrimmedRight (2).withTrimmedBottom (2)).toFloat().reduced (1.0f);
+            const auto tint = filled ? s.accent : s.ink;
+            g.setColour (held || filled ? tint.interpolatedWith (s.panel, down ? 0.2f : hover ? 0.1f : 0.0f)
+                                        : s.ink.withAlpha (! live ? 0.04f : down ? 0.22f : hover ? 0.14f : 0.08f));
+            g.fillRoundedRectangle (plate, 4.0f);
+            if (light)
+            {
+                g.setColour (b.getToggleState() ? s.lit : s.ink.withAlpha (0.25f));
+                g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ plate.getX() + 10.0f, plate.getCentreY() }));
+            }
+            return;
+        }
         // The "flat" property: one cell of a row of keys inside a frame of its own.
         if (b.getProperties().getWithDefault ("flat", false))
         {
@@ -324,7 +421,7 @@ public:
         }
     }
 
-    juce::Font getTextButtonFont (juce::TextButton&, int h) override { return label (juce::jlimit (13.0f, 18.0f, (float) h * 0.62f)); }
+    juce::Font getTextButtonFont (juce::TextButton&, int h) override { return nameFont (s.frameless, juce::jlimit (13.0f, 18.0f, (float) h * 0.62f)); }
 
     // An "arrow" property (-1 or 1) draws a small triangle instead of text. Text
     // shrinks to fit rather than being cut short.
@@ -354,6 +451,20 @@ public:
     void drawComboBox (juce::Graphics& g, int width, int height, bool, int, int, int, int, juce::ComboBox& box) override
     {
         auto r = juce::Rectangle<float> ((float) width, (float) height).withTrimmedRight (2.0f).withTrimmedBottom (2.0f).reduced (0.5f);
+        if (s.frameless)
+        {
+            // The same plate as a key, with a chevron.
+            g.setColour (s.ink.withAlpha (box.isMouseOver (true) ? 0.14f : 0.08f));
+            g.fillRoundedRectangle (r.reduced (0.5f), 4.0f);
+            const float x = r.getRight() - r.getHeight() * 0.5f, y = r.getCentreY();
+            juce::Path mark;
+            mark.startNewSubPath (x - 3.5f, y - 1.5f);
+            mark.lineTo (x, y + 2.0f);
+            mark.lineTo (x + 3.5f, y - 1.5f);
+            g.setColour (s.ink.withAlpha (0.8f));
+            g.strokePath (mark, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            return;
+        }
         g.setColour (s.shadow);
         g.fillRect (r.translated (2.0f, 2.0f));
         g.setColour (box.isMouseOver (true) ? s.panel.interpolatedWith (s.ink, 0.08f) : s.panel);
@@ -375,8 +486,8 @@ public:
         text.setFont (getComboBoxFont (box));
     }
 
-    juce::Font getComboBoxFont (juce::ComboBox& box) override { return label (juce::jlimit (13.0f, 18.0f, (float) box.getHeight() * 0.62f)); }
-    juce::Font getPopupMenuFont() override { return label (18.0f); }
+    juce::Font getComboBoxFont (juce::ComboBox& box) override { return nameFont (s.frameless, juce::jlimit (13.0f, 18.0f, (float) box.getHeight() * 0.62f)); }
+    juce::Font getPopupMenuFont() override { return nameFont (s.frameless, 18.0f); }
     juce::Font getAlertWindowTitleFont() override { return label (20.0f); }
     juce::Font getAlertWindowMessageFont() override { return label (17.0f); }
     juce::Font getAlertWindowFont() override { return label (17.0f); }
@@ -391,12 +502,20 @@ public:
         if (b.getProperties().getWithDefault ("plate", false))
         {
             const auto r = bounds.reduced (0.5f);
-            g.setColour (b.getToggleState() ? s.lit : hover ? s.panel.interpolatedWith (s.ink, 0.08f) : s.panel);
-            g.fillRect (r);
-            g.setColour (s.ink);
-            g.drawRect (r, 1.0f);
+            if (s.frameless)
+            {
+                g.setColour (b.getToggleState() ? s.lit : s.ink.withAlpha (hover ? 0.14f : 0.08f));
+                g.fillRoundedRectangle (r, 3.0f);
+            }
+            else
+            {
+                g.setColour (b.getToggleState() ? s.lit : hover ? s.panel.interpolatedWith (s.ink, 0.08f) : s.panel);
+                g.fillRect (r);
+                g.setColour (s.ink);
+                g.drawRect (r, 1.0f);
+            }
             g.setColour (b.getToggleState() ? s.shadow : s.ink);
-            g.setFont (label (15.0f));
+            g.setFont (nameFont (s.frameless, 15.0f));
             g.drawText (b.getButtonText().toUpperCase(), bounds, juce::Justification::centred);
             return;
         }
@@ -406,23 +525,35 @@ public:
         // Off is a dark track with a pale block on the left. On, the track lights and the
         // block goes dark on the right, so the state reads from across the room.
         const bool on = b.getToggleState();
-        g.setColour (on ? s.lit : s.ink);
-        g.fillRect (track);
-        g.setColour (s.ink);
-        g.drawRect (track, 1.0f);
         const auto handle = juce::Rectangle<float> (compact ? 6.0f : 9.0f, 10.0f).withCentre ({ on ? track.getRight() - (compact ? 4.5f : 6.0f) : track.getX() + (compact ? 4.5f : 6.0f), track.getCentreY() });
-        g.setColour (on ? s.shadow : s.panel);
-        g.fillRect (handle);
-        if (b.hasKeyboardFocus (true) || hover)
+        if (s.frameless)
         {
-            g.setColour (s.soft);
-            g.drawRect (track.expanded (2.0f), 1.0f);
+            // A pill: faint when off, lit when on, a touch stronger under the mouse.
+            g.setColour (on ? s.lit : s.ink.withAlpha (hover || b.hasKeyboardFocus (true) ? 0.34f : 0.24f));
+            g.fillRoundedRectangle (compact ? track.withSizeKeepingCentre (18.0f, 12.0f) : track, 7.0f);
+            g.setColour (on ? s.shadow : s.panel);
+            const float thumb = compact ? 8.0f : 10.0f;
+            g.fillEllipse (juce::Rectangle<float> (thumb, thumb).withCentre ({ track.getCentreX() + (on ? 1.0f : -1.0f) * (compact ? 3.0f : 5.0f), track.getCentreY() }));
+        }
+        else
+        {
+            g.setColour (on ? s.lit : s.ink);
+            g.fillRect (track);
+            g.setColour (s.ink);
+            g.drawRect (track, 1.0f);
+            g.setColour (on ? s.shadow : s.panel);
+            g.fillRect (handle);
+            if (b.hasKeyboardFocus (true) || hover)
+            {
+                g.setColour (s.soft);
+                g.drawRect (track.expanded (2.0f), 1.0f);
+            }
         }
         const auto text = b.getButtonText().toUpperCase();
         if (text.isEmpty() || bounds.getWidth() < 30.0f)
             return;
         g.setColour (b.getToggleState() ? s.ink : s.soft);
-        g.setFont (label (compact ? 15.0f : 16.0f));
+        g.setFont (nameFont (s.frameless, compact ? 15.0f : 16.0f));
         g.drawFittedText (text, bounds.withTrimmedLeft (compact ? 21.0f : 30.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
     }
 
@@ -436,6 +567,20 @@ public:
             return;
         }
         const float cy = (float) y + (float) h * 0.5f, left = (float) x + 1.0f, right = (float) (x + w) - 1.0f;
+        if (s.frameless)
+        {
+            // A rounded track that fills to the value, and a round thumb.
+            const float at = juce::jlimit (left, right, pos);
+            g.setColour (s.ink.withAlpha (0.16f));
+            g.fillRoundedRectangle (left, cy - 2.5f, right - left, 3.0f, 1.5f);
+            g.setColour (s.ink.withAlpha (slider.isMouseOverOrDragging() ? 1.0f : 0.82f));
+            g.fillRoundedRectangle (left, cy - 2.5f, at - left, 3.0f, 1.5f);
+            g.setColour (s.shadow.withAlpha (0.45f));
+            g.fillEllipse (juce::Rectangle<float> (13.0f, 13.0f).withCentre ({ at, cy }));
+            g.setColour (s.page.getPerceivedBrightness() < 0.5f ? juce::Colour (0xffefe8d6) : s.ink);
+            g.fillEllipse (juce::Rectangle<float> (13.0f, 13.0f).withCentre ({ at, cy - 1.0f }));
+            return;
+        }
         g.setColour (s.rule);
         for (int i = 0; i <= 4; ++i)
             g.fillRect (left + (right - left) * (float) i / 4.0f - 0.5f, cy + 6.0f, 1.0f, 4.0f);
