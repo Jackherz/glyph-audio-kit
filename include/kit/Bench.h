@@ -136,14 +136,15 @@ inline bool send (const juce::AudioBuffer<float>& audio, double sampleRate, cons
     return publish (file, (double) audio.getNumSamples() / sampleRate, chip, name);
 }
 
-// The newest moment from anyone but `myChip`.
-inline std::optional<Moment> latest (const juce::String& myChip)
+// The newest moment on the Bench, from anyone: another plug-in, another copy of this one,
+// or this one itself, so TAKE after SEND resamples what was sent.
+inline std::optional<Moment> latest()
 {
     std::optional<Moment> best;
     for (const auto& noteFile : configFolder().findChildFiles (juce::File::findFiles, false, ".*.moment"))
     {
         const auto xml = juce::XmlDocument::parse (noteFile);
-        if (xml == nullptr || ! xml->hasTagName ("MOMENT") || xml->getStringAttribute ("chip") == myChip)
+        if (xml == nullptr || ! xml->hasTagName ("MOMENT"))
             continue;
         Moment m { juce::File (xml->getStringAttribute ("file")), xml->getStringAttribute ("chip"), xml->getStringAttribute ("name"),
                    xml->getDoubleAttribute ("seconds"), xml->getStringAttribute ("stamp").getLargeIntValue() };
