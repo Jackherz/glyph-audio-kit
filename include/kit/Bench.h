@@ -327,7 +327,7 @@ public:
         else
             g.fillRect (mine);
         auto text = mine.reduced (12, 0);
-        const auto font = label (18.0f);
+        const auto font = value (18.0f);
         g.setFont (font);
         g.setColour (s.ink);
         const auto head = chip + "  " + name;

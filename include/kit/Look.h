@@ -45,16 +45,48 @@ inline Stock graphite()
              juce::Colour (0xff4c524d), dark, ink, juce::Colour (0xff101211), juce::Colour (0xffe86a2c), dark, juce::Colour (0xffe86a2c) };
 }
 
-// VT323 for everything; Glyph Grotesque for the wordmark alone.
+// A plug-in may hand the kit its own faces, once, before any editor opens. Anything left unset
+// stays as the kit draws it: VT323 for the screen and for values, the system sans for names,
+// three lines of help on the readout. A plug-in that sets nothing looks exactly as before.
+struct Faces
+{
+    juce::Typeface::Ptr screen;   // the readout, the take strip, lists: the retro face
+    juce::Typeface::Ptr name;     // names and labels on a frameless stock
+    juce::Typeface::Ptr value;    // figures printed on the paper
+    float valueShrink = 0.0f;     // taken off every value size, for a face taller than VT323
+    int readoutLines = 3;         // how many lines of help the readout may use
+};
+inline Faces& faces()
+{
+    // Never destroyed: typefaces released during static destruction, after JUCE has shut down,
+    // take a lock that is already gone.
+    static auto* f = new Faces();
+    return *f;
+}
+
+// The screen face: VT323 unless the plug-in set its own. Glyph Grotesque for the wordmark alone.
 inline juce::Font label (float size)
 {
+    if (auto face = faces().screen)
+        return juce::Font (juce::FontOptions (face).withHeight (size));
     static auto face = juce::Typeface::createSystemTypefaceFor (KitFonts::VT323Regular_ttf, (size_t) KitFonts::VT323Regular_ttfSize);
     return juce::Font (juce::FontOptions (face).withHeight (size));
 }
 
-// The system's sans-serif, a little tracked for capitals: names and labels on a frameless stock.
+// A figure on the paper: the value face, or the screen face when there isn't one.
+inline juce::Font value (float size)
+{
+    if (auto face = faces().value)
+        return juce::Font (juce::FontOptions (face).withHeight (size - faces().valueShrink));
+    return label (size);
+}
+
+// The system's sans-serif (or the plug-in's name face), a little tracked for capitals: names and
+// labels on a frameless stock.
 inline juce::Font sans (float size)
 {
+    if (auto face = faces().name)
+        return juce::Font (juce::FontOptions (face).withHeight (size)).withExtraKerningFactor (0.06f);
     return juce::Font (juce::FontOptions().withName (juce::Font::getDefaultSansSerifFontName()).withHeight (size)).withExtraKerningFactor (0.06f);
 }
 
@@ -164,9 +196,10 @@ inline void drawPanel (juce::Graphics& g, juce::Rectangle<int> r, const Stock& s
     const auto named = nameFont (s.frameless, 16.0f);
     g.setFont (named);
     g.drawText (name, row.removeFromLeft (textWidth (named, name) + 2), juce::Justification::centredLeft);
-    g.setFont (font);
+    const auto figure = value (16.0f);
+    g.setFont (figure);
     g.setColour (s.soft);
-    const int tailWidth = textWidth (font, tail) + 2;
+    const int tailWidth = textWidth (figure, tail) + 2;
     g.drawText (tail, row.removeFromRight (tailWidth), juce::Justification::centredRight);
     leader (g, row.getX() + 4, row.getRight() - 4, head.getCentreY(), s.rule);
 }
@@ -234,7 +267,7 @@ inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock&
     if (longText)
     {
         g.setFont (label (17.0f));
-        g.drawFittedText (value, inner, juce::Justification::topLeft, 3, 0.85f);
+        g.drawFittedText (value, inner, juce::Justification::topLeft, faces().readoutLines, 0.85f);
         return;
     }
     if (meta.isNotEmpty())
