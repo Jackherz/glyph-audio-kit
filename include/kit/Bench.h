@@ -473,12 +473,12 @@ private:
         const auto current = setting ("category_" + owner);
         menu.addSectionHeader (audioFolder (owner).getFullPathName());
         menu.addItem (1, "Show in Finder");
-        menu.addItem (2, "Choose a folder...");
+        menu.addItem (2, "Choose a folder");
         menu.addSectionHeader ("SEND INTO");
         menu.addItem (3, "No category", true, current.isEmpty());
         for (int i = 0; i < names.size(); ++i)
             menu.addItem (100 + i, names[i], true, names[i] == current);
-        menu.addItem (4, "New category...");
+        menu.addItem (4, "New category");
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&folderKey), [this, names] (int chosen)
         {
             if (chosen == 1)

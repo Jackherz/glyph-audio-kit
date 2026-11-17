@@ -504,7 +504,7 @@ private:
                 file.addItem (100 + i, presets.categoryList()[i], true, entry.category == presets.categoryList()[i]);
             menu.addSeparator();
             menu.addSubMenu ("Category", file);
-            menu.addItem (2, "Rename...");
+            menu.addItem (2, "Rename");
             menu.addItem (3, "Move to Trash");
         }
         juce::PopupMenu::dismissAllActiveMenus();
@@ -570,7 +570,7 @@ private:
     juce::OwnedArray<juce::TextButton> viewKeys;
     juce::StringArray viewNames;   // each key's view, in the same order
     juce::ListBox list;
-    juce::TextButton keep { "KEEP" }, cancel { "CANCEL" }, saveAsButton { "SAVE AS..." }, folderButton { "FOLDER" };
+    juce::TextButton keep { "KEEP" }, cancel { "CANCEL" }, saveAsButton { "SAVE AS" }, folderButton { "FOLDER" };
     juce::Rectangle<int> keysFoot;
     std::unique_ptr<juce::XmlElement> soundBefore;
     juce::String nameBefore;

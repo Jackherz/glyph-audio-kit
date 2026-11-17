@@ -265,8 +265,16 @@ inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock&
     g.fillRoundedRectangle (chipBox.toFloat(), s.frameless ? 3.0f : 0.0f);
     g.setColour (s.sunk);
     g.drawText (chip, chipBox, juce::Justification::centred);
-    g.setColour (s.onSunk.withAlpha (0.75f));
-    g.drawFittedText (title, top.withTrimmedRight (8), juce::Justification::centredLeft, 1, 0.8f);
+    // The title, never cut: a little narrower, then a little smaller, down to 11.
+    {
+        const auto titleBox = top.withTrimmedRight (8);
+        float h = 15.0f;
+        while (h > 11.0f && juce::GlyphArrangement::getStringWidth (label (h), title) * 0.8f > (float) titleBox.getWidth())
+            h -= 0.5f;
+        g.setColour (s.onSunk.withAlpha (0.75f));
+        g.setFont (label (h));
+        g.drawFittedText (title, titleBox, juce::Justification::centredLeft, 1, 0.6f);
+    }
     g.setColour (s.onSunk);
     if (longText)
     {
@@ -298,16 +306,22 @@ inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock&
         g.drawText (meta, inner.removeFromBottom (15), juce::Justification::centredLeft);
         g.setColour (s.onSunk);
     }
-    g.setFont (label (28.0f));
+    // The value, never cut: at the screen's size when it fits, then a little narrower (to 0.85)
+    // and a little smaller, down to 16; at 16 it may wrap onto the lines below.
+    float h = 28.0f;
+    while (h > 16.0f && juce::GlyphArrangement::getStringWidth (label (h), value) * 0.85f > (float) inner.getWidth())
+        h -= 0.5f;
+    const int lines = juce::GlyphArrangement::getStringWidth (label (h), value) * 0.85f > (float) inner.getWidth() ? 3 : 1;
+    g.setFont (label (h));
     if (! cursorOff)
     {
-        g.drawFittedText (value, inner, juce::Justification::centredLeft, 1, 0.6f);
+        g.drawFittedText (value, inner, juce::Justification::centredLeft, lines, 0.85f);
         return;
     }
     // What drawFittedText does, without the last glyph.
     juce::GlyphArrangement glyphs;
     glyphs.addFittedText (g.getCurrentFont(), value, (float) inner.getX(), (float) inner.getY(), (float) inner.getWidth(),
-                          (float) inner.getHeight(), juce::Justification::centredLeft, 1, 0.6f);
+                          (float) inner.getHeight(), juce::Justification::centredLeft, lines, 0.85f);
     if (glyphs.getNumGlyphs() > 0)
         glyphs.removeRangeOfGlyphs (glyphs.getNumGlyphs() - 1, 1);
     glyphs.draw (g);
