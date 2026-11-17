@@ -238,8 +238,12 @@ inline void drawMasthead (juce::Graphics& g, juce::Rectangle<int> area, const St
 }
 
 // The readout: top right, always. A sunk window with a title line and a status chip.
+// cursorOff: value ends in a blinking cursor that is off just now. It is still measured, so a
+// long value squeezed to fit keeps its width (and doesn't shake) as the cursor blinks; only
+// its ink is left out.
 inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock& s, const juce::String& title,
-                         const juce::String& chip, const juce::String& value, const juce::String& meta, bool longText)
+                         const juce::String& chip, const juce::String& value, const juce::String& meta, bool longText,
+                         bool cursorOff = false)
 {
     if (s.frameless)
         fillSurface (g, r.toFloat(), s.sunk);
@@ -266,9 +270,26 @@ inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock&
     g.setColour (s.onSunk);
     if (longText)
     {
-        g.setFont (label (17.0f));
-        g.drawFittedText (value, inner, juce::Justification::topLeft, faces().readoutLines, 0.85f);
-        return;
+        // Help: at the screen's own size when it fits, and a little smaller when a long one
+        // wouldn't, so the whole sentence is there to read rather than cut off with "...".
+        for (float h = 17.0f;; h -= 0.5f)
+        {
+            const auto font = label (h);
+            juce::GlyphArrangement glyphs;
+            glyphs.addJustifiedText (font, value, (float) inner.getX(), (float) inner.getY() + font.getAscent(),
+                                     (float) inner.getWidth(), juce::Justification::left);
+            if (h <= 12.0f || glyphs.getBoundingBox (0, -1, true).getBottom() <= (float) inner.getBottom())
+            {
+                if (h <= 12.0f)   // still too long at the smallest: as before, fitted and cut
+                {
+                    g.setFont (font);
+                    g.drawFittedText (value, inner, juce::Justification::topLeft, faces().readoutLines, 0.85f);
+                    return;
+                }
+                glyphs.draw (g);
+                return;
+            }
+        }
     }
     if (meta.isNotEmpty())
     {
@@ -278,7 +299,18 @@ inline void drawReadout (juce::Graphics& g, juce::Rectangle<int> r, const Stock&
         g.setColour (s.onSunk);
     }
     g.setFont (label (28.0f));
-    g.drawFittedText (value, inner, juce::Justification::centredLeft, 1, 0.6f);
+    if (! cursorOff)
+    {
+        g.drawFittedText (value, inner, juce::Justification::centredLeft, 1, 0.6f);
+        return;
+    }
+    // What drawFittedText does, without the last glyph.
+    juce::GlyphArrangement glyphs;
+    glyphs.addFittedText (g.getCurrentFont(), value, (float) inner.getX(), (float) inner.getY(), (float) inner.getWidth(),
+                          (float) inner.getHeight(), juce::Justification::centredLeft, 1, 0.6f);
+    if (glyphs.getNumGlyphs() > 0)
+        glyphs.removeRangeOfGlyphs (glyphs.getNumGlyphs() - 1, 1);
+    glyphs.draw (g);
 }
 
 // Knobs, keys, fields, switches and sliders, the same on every stock. The stock is
